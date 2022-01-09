@@ -1,0 +1,16 @@
+﻿{
+    "configurations": [
+        {
+            "name": "x64-Release",
+            "generator": "Ninja",
+            "configurationType": "RelWithDebInfo",
+            "buildRoot": "${projectDir}\\out\\build\\${name}",
+            "installRoot": "${projectDir}\\out\\install\\${name}",
+            "cmakeCommandArgs": "-DBN_INSTALL_DIR=\"C:\\Users\\luca\\AppData\\Local\\Vector35\\BinaryNinja\" -DBN_PLUGIN_DIR=\"C:\\Users\\luca\\AppData\\Roaming\\Binary Ninja\\plugins\" ",
+            "buildCommandArgs": "",
+            "ctestCommandArgs": "",
+            "inheritEnvironments": [ "msvc_x64_x64" ],
+            "variables": []
+        }
+    ]
+}
