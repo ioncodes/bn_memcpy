@@ -30,7 +30,7 @@ std::optional<CopyLoopInformation> DetectDerefCopyLoop(Ref<HighLevelILFunction> 
     const auto& lhs = assignment.GetDestExpr().As<HLIL_DEREF>().GetSourceExpr();
     const auto& rhs = assignment.GetSourceExpr().As<HLIL_DEREF>().GetSourceExpr();
     if (lhs.operation != HLIL_ADD ||
-        lhs.operation != HLIL_ADD)
+        rhs.operation != HLIL_ADD)
         return std::nullopt;
 
     // We found a *(lhs + i) = *(rhs + i) pattern!
