@@ -85,43 +85,36 @@ std::vector<CopyLoopInformation> DetectCopyLoop(Ref<HighLevelILFunction> functio
 
     for (size_t i = 0; i < function->GetInstructionCount(); i++)
     {
-        try
-        {
-            // Is it a while loop?
-            auto instruction = function->GetInstruction(i);
-            if (instruction.operation != HLIL_WHILE)
-                continue;
+        // Is it a while loop?
+        auto instruction = function->GetInstruction(i);
+        if (instruction.operation != HLIL_WHILE)
+            continue;
 
-            // Is it a HLIL_CMP_SLT conditional?
-            // Does it have a constant size?
-            const auto condition = instruction.As<HLIL_WHILE>().GetConditionExpr();
-            if (condition.operation != HLIL_CMP_SLT ||
-                condition.GetRightExpr().operation != HLIL_CONST)
-                continue;
+        // Is it a HLIL_CMP_SLT conditional?
+        // Does it have a constant size?
+        const auto condition = instruction.As<HLIL_WHILE>().GetConditionExpr();
+        if (condition.operation != HLIL_CMP_SLT ||
+            condition.GetRightExpr().operation != HLIL_CONST)
+            continue;
 
-            // Get the loop length
-            const auto size = condition.GetRightExpr().As<HLIL_CONST>().GetConstant();
+        // Get the loop length
+        const auto size = condition.GetRightExpr().As<HLIL_CONST>().GetConstant();
         
-            // Is the inner loop body an assignment instruction?
-            instruction = function->GetInstruction(++i);
-            if (instruction.operation != HLIL_ASSIGN)
-                continue;
+        // Is the inner loop body an assignment instruction?
+        instruction = function->GetInstruction(++i);
+        if (instruction.operation != HLIL_ASSIGN)
+            continue;
 
-            // Cast to an assignment operation
-            const auto& assignment = instruction.As<HLIL_ASSIGN>();
+        // Cast to an assignment operation
+        const auto& assignment = instruction.As<HLIL_ASSIGN>();
 
-            // Pattern match
-            auto opt = DetectIndexedCopyLoop(function, assignment, i, size);
-            if (!opt.has_value())
-                opt = DetectDerefCopyLoop(function, assignment, i, size);
+        // Pattern match
+        auto opt = DetectIndexedCopyLoop(function, assignment, i, size);
+        if (!opt.has_value())
+            opt = DetectDerefCopyLoop(function, assignment, i, size);
 
-            if (opt.has_value())
-                loops.push_back(std::move(opt.value()));
-        }
-        catch (const std::exception& exception)
-        {
-            LogError("Error: %s\n", exception.what());
-        }
+        if (opt.has_value())
+            loops.push_back(std::move(opt.value()));
     }
 
     return loops;
@@ -129,33 +122,40 @@ std::vector<CopyLoopInformation> DetectCopyLoop(Ref<HighLevelILFunction> functio
 
 void SimplifyMemcpy(Ref<AnalysisContext> analysisContext)
 {
-    const auto hlilFunction = analysisContext->GetHighLevelILFunction();
-    const auto function = analysisContext->GetFunction();
-    const auto loops = DetectCopyLoop(hlilFunction);
-
-    for (const auto& loop : loops)
+    try
     {
-        const auto& [dst, src] = loop.variables;
+        const auto hlilFunction = analysisContext->GetHighLevelILFunction();
+        const auto function = analysisContext->GetFunction();
+        const auto loops = DetectCopyLoop(hlilFunction);
 
-        const auto& dst_name = function->GetVariableName(dst);
-        const auto& src_name = function->GetVariableName(src);
+        for (const auto& loop : loops)
+        {
+            const auto& [dst, src] = loop.variables;
 
-        LogInfo("Found memcpy(%s, %s, 0x%llx)\n", dst_name, src_name, loop.size);
+            const auto& dst_name = function->GetVariableName(dst);
+            const auto& src_name = function->GetVariableName(src);
 
-        const auto symbols = function->GetView()->GetSymbolsByName("memcpy");
-        const auto memcpy = hlilFunction->AddExpr(HLIL_CONST_PTR, 8, symbols[0]->GetAddress());
-        const auto memcpy_args = hlilFunction->AddOperandList({
-            hlilFunction->AddExpr(HLIL_VAR, 8, dst.ToIdentifier()),
-            hlilFunction->AddExpr(HLIL_VAR, 8, src.ToIdentifier()),
-            hlilFunction->AddExpr(HLIL_CONST, 8, loop.size)
-        });
-        const auto memcpy_call = hlilFunction->AddExpr(HLIL_CALL, 8, memcpy, 3, memcpy_args);
-        const auto nop = hlilFunction->AddExpr(HLIL_NOP, 0);
+            LogInfo("Found memcpy(%s, %s, 0x%llx)\n", dst_name, src_name, loop.size);
 
-        hlilFunction->ReplaceExpr(loop.head.exprIndex, memcpy_call);
-        hlilFunction->ReplaceExpr(loop.body.exprIndex, nop);
+            const auto symbols = function->GetView()->GetSymbolsByName("memcpy");
+            const auto memcpy = hlilFunction->AddExpr(HLIL_CONST_PTR, 8, symbols[0]->GetAddress());
+            const auto memcpy_args = hlilFunction->AddOperandList({
+                hlilFunction->AddExpr(HLIL_VAR, 8, dst.ToIdentifier()),
+                hlilFunction->AddExpr(HLIL_VAR, 8, src.ToIdentifier()),
+                hlilFunction->AddExpr(HLIL_CONST, 8, loop.size)
+            });
+            const auto memcpy_call = hlilFunction->AddExpr(HLIL_CALL, 8, memcpy, 3, memcpy_args);
+            const auto nop = hlilFunction->AddExpr(HLIL_NOP, 0);
 
-        hlilFunction->Finalize();
+            hlilFunction->ReplaceExpr(loop.head.exprIndex, memcpy_call);
+            hlilFunction->ReplaceExpr(loop.body.exprIndex, nop);
+
+            hlilFunction->Finalize();
+        }
+    }
+    catch (const std::exception& exception)
+    {
+        LogError("Error: %s\n", exception.what());
     }
 }
 
